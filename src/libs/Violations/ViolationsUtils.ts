@@ -112,7 +112,7 @@ function getTagViolationForIndependentTags(policyTagList: PolicyTagList, transac
             const selectedTag = selectedTags[i];
             const tags = policyTagList[policyTagKeys[i]].tags;
             const isTagInPolicy = Object.values(tags).some((tag) => tag.name === selectedTag && !!tag.enabled);
-            if (!isTagInPolicy) {
+            if (!isTagInPolicy && selectedTag) {
                 newTransactionViolations.push({
                     name: CONST.VIOLATIONS.TAG_OUT_OF_POLICY,
                     type: CONST.VIOLATION_TYPES.VIOLATION,
@@ -251,6 +251,7 @@ const ViolationsUtils = {
             maxAge = 0,
             tagName,
             taxName,
+            type,
         } = violation.data ?? {};
 
         switch (violation.name) {
@@ -288,7 +289,7 @@ const ViolationsUtils = {
             case 'missingTag':
                 return translate('violations.missingTag', {tagName});
             case 'modifiedAmount':
-                return translate('violations.modifiedAmount');
+                return translate('violations.modifiedAmount', {type, displayPercentVariance: violation.data?.displayPercentVariance});
             case 'modifiedDate':
                 return translate('violations.modifiedDate');
             case 'nonExpensiworksExpense':

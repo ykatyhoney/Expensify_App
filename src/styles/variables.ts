@@ -227,6 +227,10 @@ export default {
 
     cardPreviewHeight: 148,
     cardPreviewWidth: 235,
+    cardIconWidth: 40,
+    cardIconHeight: 25.29,
+    cardBorderRadius: 2.35,
+
     cardNameWidth: 156,
     holdMenuIconSize: 64,
     updateAnimationW: 390,
@@ -241,6 +245,9 @@ export default {
     eReceiptBackgroundImageMinWidth: 217,
 
     searchTypeColumnWidth: 52,
+
+    composerTooltipShiftHorizontal: 10,
+    composerTooltipShiftVertical: -10,
 
     h20: 20,
     h28: 28,

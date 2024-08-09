@@ -19,7 +19,6 @@ import ReportActionItemImages from '@components/ReportActionItem/ReportActionIte
 import {showContextMenuForReport} from '@components/ShowContextMenuContext';
 import Text from '@components/Text';
 import useLocalize from '@hooks/useLocalize';
-import usePermissions from '@hooks/usePermissions';
 import useResponsiveLayout from '@hooks/useResponsiveLayout';
 import useStyleUtils from '@hooks/useStyleUtils';
 import useTheme from '@hooks/useTheme';
@@ -84,7 +83,6 @@ function MoneyRequestPreviewContent({
     const managerID = iouReport?.managerID ?? -1;
     const ownerAccountID = iouReport?.ownerAccountID ?? -1;
     const isPolicyExpenseChat = ReportUtils.isPolicyExpenseChat(chatReport);
-    const {canUseViolations} = usePermissions();
 
     const participantAccountIDs =
         ReportActionsUtils.isMoneyRequestAction(action) && isBillSplit ? ReportActionsUtils.getOriginalMessage(action)?.participantAccountIDs ?? [] : [managerID, ownerAccountID];
@@ -112,11 +110,7 @@ function MoneyRequestPreviewContent({
     const isSettlementOrApprovalPartial = !!iouReport?.pendingFields?.partial;
     const isPartialHold = isSettlementOrApprovalPartial && isOnHold;
     const hasViolations = TransactionUtils.hasViolation(transaction?.transactionID ?? '-1', transactionViolations);
-    const hasNoticeTypeViolations = !!(
-        TransactionUtils.hasNoticeTypeViolation(transaction?.transactionID ?? '-1', transactionViolations) &&
-        ReportUtils.isPaidGroupPolicy(iouReport) &&
-        canUseViolations
-    );
+    const hasNoticeTypeViolations = TransactionUtils.hasNoticeTypeViolation(transaction?.transactionID ?? '-1', transactionViolations) && ReportUtils.isPaidGroupPolicy(iouReport);
     const hasFieldErrors = TransactionUtils.hasMissingSmartscanFields(transaction);
     const isDistanceRequest = TransactionUtils.isDistanceRequest(transaction);
     const isFetchingWaypointsFromServer = TransactionUtils.isFetchingWaypointsFromServer(transaction);
@@ -194,7 +188,9 @@ function MoneyRequestPreviewContent({
         }
 
         if (shouldShowRBR && transaction) {
-            const violations = TransactionUtils.getTransactionViolations(transaction.transactionID, transactionViolations);
+            const violations = TransactionUtils.getTransactionViolations(transaction.transactionID, transactionViolations)?.sort((a) =>
+                a.type === CONST.VIOLATION_TYPES.VIOLATION ? -1 : 0,
+            );
             if (violations?.[0]) {
                 const violationMessage = ViolationsUtils.getViolationTranslation(violations[0], translate);
                 const violationsCount = violations.filter((v) => v.type === CONST.VIOLATION_TYPES.VIOLATION).length;
@@ -203,16 +199,19 @@ function MoneyRequestPreviewContent({
 
                 return `${message} ${CONST.DOT_SEPARATOR} ${isTooLong || hasViolationsAndFieldErrors ? translate('violations.reviewRequired') : violationMessage}`;
             }
-
-            const isMerchantMissing = TransactionUtils.isMerchantMissing(transaction);
-            const isAmountMissing = TransactionUtils.isAmountMissing(transaction);
-            if (isAmountMissing && isMerchantMissing) {
-                message += ` ${CONST.DOT_SEPARATOR} ${translate('violations.reviewRequired')}`;
-            } else if (isAmountMissing) {
-                message += ` ${CONST.DOT_SEPARATOR} ${translate('iou.missingAmount')}`;
-            } else if (isMerchantMissing) {
-                message += ` ${CONST.DOT_SEPARATOR} ${translate('iou.missingMerchant')}`;
-            } else if (shouldShowHoldMessage) {
+            if (hasFieldErrors) {
+                const isMerchantMissing = TransactionUtils.isMerchantMissing(transaction);
+                const isAmountMissing = TransactionUtils.isAmountMissing(transaction);
+                if (isAmountMissing && isMerchantMissing) {
+                    message += ` ${CONST.DOT_SEPARATOR} ${translate('violations.reviewRequired')}`;
+                } else if (isAmountMissing) {
+                    message += ` ${CONST.DOT_SEPARATOR} ${translate('iou.missingAmount')}`;
+                } else if (isMerchantMissing) {
+                    message += ` ${CONST.DOT_SEPARATOR} ${translate('iou.missingMerchant')}`;
+                }
+                return message;
+            }
+            if (shouldShowHoldMessage) {
                 message += ` ${CONST.DOT_SEPARATOR} ${translate('violations.hold')}`;
             }
         } else if (hasNoticeTypeViolations && transaction && !ReportUtils.isReportApproved(iouReport) && !ReportUtils.isSettled(iouReport?.reportID)) {
@@ -274,8 +273,7 @@ function MoneyRequestPreviewContent({
 
     const navigateToReviewFields = () => {
         const comparisonResult = TransactionUtils.compareDuplicateTransactionFields(reviewingTransactionID);
-        const allTransactionIDsDuplicates = [reviewingTransactionID, ...duplicates].filter((id) => id !== transaction?.transactionID);
-        Transaction.setReviewDuplicatesKey({...comparisonResult.keep, duplicates: allTransactionIDsDuplicates, transactionID: transaction?.transactionID ?? ''});
+        Transaction.setReviewDuplicatesKey({...comparisonResult.keep, duplicates, transactionID: transaction?.transactionID ?? ''});
         if ('merchant' in comparisonResult.change) {
             Navigation.navigate(ROUTES.TRANSACTION_DUPLICATE_REVIEW_MERCHANT_PAGE.getRoute(route.params?.threadReportID));
         } else if ('category' in comparisonResult.change) {
@@ -291,7 +289,7 @@ function MoneyRequestPreviewContent({
         } else if ('reimbursable' in comparisonResult.change) {
             Navigation.navigate(ROUTES.TRANSACTION_DUPLICATE_REVIEW_REIMBURSABLE_PAGE.getRoute(route.params?.threadReportID));
         } else {
-            // Navigation to confirm screen will be done in seperate PR
+            Navigation.navigate(ROUTES.TRANSACTION_DUPLICATE_CONFIRMATION_PAGE.getRoute(route.params?.threadReportID));
         }
     };
 
@@ -305,6 +303,9 @@ function MoneyRequestPreviewContent({
                 }}
                 errorRowStyles={[styles.mbn1]}
                 needsOffscreenAlphaCompositing
+                pendingAction={action.pendingAction}
+                shouldDisableStrikeThrough={!isDeleted}
+                shouldDisableOpacity={!isDeleted}
             >
                 <View
                     style={[
